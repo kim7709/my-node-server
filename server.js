@@ -41,14 +41,21 @@ mqttClient.on('message', (topic, message) => {
 });
 
 app.get('/api/status', (req, res) => {
+  const vibrationDetected = latestSensorData.vibration === '1';
+  const soundDetected = latestSensorData.sound === '1';
+  const distance = parseFloat(latestSensorData.distance || '0');
+
+  const distanceThreshold = 50; // cm 이하일 경우 모션 감지로 판단
+  const motionDetected = vibrationDetected || soundDetected || distance < distanceThreshold;
+
   res.json({
     temperature: latestSensorData.temperature || '--',
     humidity: latestSensorData.humidity || '--',
-    motion: latestSensorData.motion === '1' ? '감지됨' : '없음',
-    window: latestSensorData.window === 'open' ? '열림' : '닫힘',
-    sound: latestSensorData.sound === '1' ? '감지됨' : '없음',
+    motion: motionDetected ? '감지됨' : '없음',
+    window: latestSensorData.window === 'open' ? '열림' : '닫힘', // 적외선 센서 기준
+    sound: soundDetected ? '감지됨' : '없음',
     distance: latestSensorData.distance || '--',
-    vibration: latestSensorData.vibration === '1' ? '감지됨' : '없음',
+    vibration: vibrationDetected ? '감지됨' : '없음',
     window_motor_state: latestSensorData.window_motor_state || '--',
     danger: latestSensorData.danger === 'true' ? '위험' : '안전'
   });
