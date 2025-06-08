@@ -2,10 +2,14 @@ const express = require('express');
 const mqtt = require('mqtt');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const path = require('path');
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
+
+// 정적파일 서빙: public 폴더 내 파일들 제공
+app.use(express.static(path.join(__dirname, 'public')));
 
 const mqttClient = mqtt.connect('mqtt://broker.hivemq.com:1883');
 const topicPrefix = 'mykmou/window25/';
@@ -52,7 +56,7 @@ app.get('/api/status', (req, res) => {
     temperature: latestSensorData.temperature || '--',
     humidity: latestSensorData.humidity || '--',
     motion: motionDetected ? '감지됨' : '없음',
-    window: latestSensorData.window === 'open' ? '열림' : '닫힘', // 적외선 센서 기준
+    window: latestSensorData.window === 'open' ? '열림' : '닫힘',
     sound: soundDetected ? '감지됨' : '없음',
     distance: latestSensorData.distance || '--',
     vibration: vibrationDetected ? '감지됨' : '없음',
@@ -70,6 +74,39 @@ app.post('/api/control', (req, res) => {
     res.status(400).json({ error: '잘못된 명령어입니다.' });
   }
 });
+
+// (선택) 이미지 업로드 및 리스트 API 예시
+// 필요 없으면 삭제 가능
+const multer = require('multer');
+const fs = require('fs');
+
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname);
+  }
+});
+const upload = multer({ storage });
+
+app.post('/upload', upload.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: '파일이 없습니다.' });
+  res.json({ filename: req.file.filename, url: `/uploads/${req.file.filename}` });
+});
+
+app.get('/images/list', (req, res) => {
+  fs.readdir(uploadDir, (err, files) => {
+    if (err) return res.status(500).json({ error: '파일 목록을 불러올 수 없습니다.' });
+    const images = files.map(filename => ({ filename, url: `/uploads/${filename}` }));
+    res.json(images);
+  });
+});
+
+// 업로드 폴더 정적 서빙
+app.use('/uploads', express.static(uploadDir));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
